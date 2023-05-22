@@ -32,9 +32,10 @@
     </style>
 </head>
 <body>
-    <h1>Input M3U URL</h1>
-    <form method="POST" action="/">
+    <h1>Input M3U URL or Upload M3U File</h1>
+    <form method="POST" action="/" enctype="multipart/form-data">
         <input type="text" name="m3u_url" placeholder="Enter M3U URL">
+        <input type="file" name="m3u_file">
         <button type="submit">Submit</button>
     </form>
 </body>

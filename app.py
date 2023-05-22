@@ -4,12 +4,16 @@ import requests
 from requests.exceptions import ChunkedEncodingError
 import re
 from models import db, Entry
+from werkzeug.utils import secure_filename
+import os
+
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///m3u.db'
 # Initialize the db instance
 db.init_app(app)
-
+with app.app_context():
+    db.create_all()
 
 # Retry logic for ChunkedEncodingError
 def retry_on_chunked_encoding_error(url):
@@ -84,25 +88,36 @@ def parse_m3u_content(m3u_content):
 
     return entries
 
+# Set the upload folder path
+app.config['UPLOAD_FOLDER'] = os.path.join(app.root_path, 'uploads')
+
+# Ensure the upload folder exists
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
 # Define your routes here
 @app.route('/', methods=['GET', 'POST'])
 def index():
-    from models import Entry
-    db.create_all()
+    # ...
     if request.method == 'POST':
-        m3u_url = request.form.get('m3u_url')
-        if m3u_url:
-            # Download the M3U content with retry logic
-            m3u_content = retry_on_chunked_encoding_error(m3u_url)
+        if 'm3u_file' in request.files:
+            m3u_file = request.files['m3u_file']
+            if m3u_file.filename != '':
+                # Save the uploaded file
+                filename = secure_filename(m3u_file.filename)
+                m3u_file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
 
-            # Parse the M3U content and extract entries
-            entries = parse_m3u_content(m3u_content)
+                # Read the contents of the file
+                with open(os.path.join(app.config['UPLOAD_FOLDER'], filename), 'r') as file:
+                    m3u_content = file.read()
 
-            # Save the entries to the database
-            db.session.bulk_save_objects(entries)
-            db.session.commit()
+                # Parse the M3U content and extract entries
+                entries = parse_m3u_content(m3u_content)
 
-            return 'Data imported successfully.'
+                # Save the entries to the database
+                db.session.bulk_save_objects(entries)
+                db.session.commit()
+
+                return 'Data imported successfully.'
 
     return render_template('index.html')
 
