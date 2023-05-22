@@ -6,11 +6,11 @@
         body {
             display: flex;
             flex-direction: column;
-            align-items: flex-start; /* Align items to the top left */
-            justify-content: flex-start; /* Align items to the top left */
+            align-items: flex-start;
+            justify-content: flex-start;
             height: 100vh;
-            margin: 0; /* Remove default body margin */
-            padding: 20px; /* Add padding for spacing */
+            margin: 0;
+            padding: 20px;
         }
 
         h1 {
@@ -20,11 +20,50 @@
         .form-container {
             display: flex;
             flex-direction: column;
+            margin-bottom: 20px;
         }
 
         .form-container input[type="text"],
         .form-container input[type="file"] {
             margin-bottom: 10px;
+        }
+
+        #unique-tvg-types {
+            margin-top: 20px;
+        }
+
+        #unique-tvg-types table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        #unique-tvg-types th,
+        #unique-tvg-types td {
+            padding: 8px;
+            border: 1px solid #ccc;
+        }
+
+        #progress-container {
+            display: none;
+            margin-top: 20px;
+        }
+
+        #progress-bar {
+            width: 100%;
+            height: 20px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+        }
+
+        #progress-bar-fill {
+            height: 100%;
+            width: 0;
+            background-color: #4CAF50;
+            border-radius: 4px;
+        }
+
+        #progress-message {
+            margin-top: 8px;
         }
     </style>
 </head>
@@ -37,14 +76,127 @@
             <button type="submit" id="upload-button">Submit</button>
         </form>
     </div>
-    <div id="progress-container" style="display: none;">
-        <progress id="upload-progress" max="100"></progress>
+    <div id="unique-tvg-types">
+        <h2>Unique TVG Types:</h2>
+        <table id="tvg-type-table">
+            <thead>
+                <tr>
+                    <th>TVG Type</th>
+                </tr>
+            </thead>
+            <tbody id="tvg-type-body">
+                {% for tvg_type in tvg_types %}
+                <tr>
+                    <td>{{ tvg_type }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    <div id="progress-container">
+        <div id="progress-bar">
+            <div id="progress-bar-fill"></div>
+        </div>
         <p id="progress-message"></p>
     </div>
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script>
-        // JavaScript code here
+        $(document).ready(function() {
+            $('#upload-form').submit(function(event) {
+                event.preventDefault(); // Prevent form submission
+
+                // Hide form and show progress container
+                $('.form-container').hide();
+                $('#progress-container').show();
+
+                // Display initial progress message
+                $('#progress-message').text('Downloading and processing data...');
+
+                // Perform AJAX request to submit the form data
+                $.ajax({
+                    url: '/',
+                    type: 'POST',
+                    data: new FormData(this),
+                    processData: false,
+                    contentType: false,
+                    xhr: function() {
+                        var xhr = new window.XMLHttpRequest();
+
+                        // Update progress bar
+                        xhr.upload.addEventListener('progress', function(event) {
+                            if (event.lengthComputable) {
+                                var progress = (event.loaded / event.total) * 100;
+                                $('#progress-bar-fill').width(progress + '%');
+                            }
+                        });
+
+                        return xhr;
+                    },
+                    success: function(response) {
+                        // Hide progress container and show success message
+                        $('#progress-container').hide();
+                        $('.form-container').show();
+                        $('#progress-message').text('');
+
+                        // Update the table with the latest content
+                        $('#tvg-type-body').empty(); // Clear existing entries
+                        response.tvg_types.forEach(function(tvgType) {
+                            var tableRow = $('<tr>');
+                            var tableData = $('<td>').text(tvgType);
+                            tableRow.append(tableData);
+                            $('#tvg-type-body').append(tableRow);
+                        });
+                    },
+                    error: function(error) {
+                        // Hide progress container and show error message
+                        $('#progress-container').hide();
+                        $('.form-container').show();
+                        $('#progress-message').text('Error processing M3U.');
+                        console.log('Error:', error);
+                    }
+                });
+            });
+        });
     </script>
+        <script>
+            // Function to update the TVG types table
+            function updateTvgTypesTable(tvgTypes) {
+                const tvgTypesTableBody = document.getElementById('tvg-type-body');
+                tvgTypesTableBody.innerHTML = '';  // Clear the table body
+
+                // Iterate over the TVG types and create table rows
+                tvgTypes.forEach(tvgType => {
+                    const row = document.createElement('tr');
+                    const tvgTypeCell = document.createElement('td');
+                    tvgTypeCell.textContent = tvgType;
+                    row.appendChild(tvgTypeCell);
+                    tvgTypesTableBody.appendChild(row);
+                });
+            }
+
+            // Function to fetch the TVG types from the server
+            function fetchTvgTypes() {
+                fetch('/unique_tvg_types')
+                    .then(response => response.json())
+                    .then(data => {
+                        const tvgTypes = data.tvg_types;
+                        updateTvgTypesTable(tvgTypes);
+                    })
+                    .catch(error => console.error('Error:', error));
+            }
+
+            // Function to poll for TVG types updates
+            function pollTvgTypes() {
+                fetchTvgTypes();
+                setInterval(fetchTvgTypes, 5000);  // Poll every 5 seconds
+            }
+
+            // Call the pollTvgTypes function when the page is loaded
+            window.addEventListener('DOMContentLoaded', pollTvgTypes);
+        </script>
+    
+
 </body>
 </html>

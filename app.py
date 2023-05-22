@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, jsonify, Response, current_app
 from db import db
 from models import Entry, UniqueTvgType, UniqueGroupTitle
 import requests
@@ -6,6 +6,7 @@ from requests.exceptions import ChunkedEncodingError
 import re
 import os
 from werkzeug.utils import secure_filename
+import json
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///m3u.db'
@@ -36,6 +37,7 @@ def retry_on_chunked_encoding_error(url):
             retries += 1
 
     raise Exception("Failed to download the M3U content.")
+
 
 # Parse M3U content and extract entries
 def parse_m3u_content(m3u_content):
@@ -80,7 +82,7 @@ def parse_m3u_content(m3u_content):
             else:
                 entry_data['tvg_type'] = 'live'
 
-            # Create an Entry object or data structure with the extracted data
+            # Create an Entry object or data structure
             entry = Entry(
                 channel_number=entry_data['channel_number'],
                 metadata_value=entry_data['metadata_value'],
@@ -95,45 +97,55 @@ def parse_m3u_content(m3u_content):
 
     return entries
 
+
 # Define your routes here
 @app.route('/', methods=['GET', 'POST'])
 def index():
     from models import Entry, UniqueTvgType, UniqueGroupTitle
-    db.create_all()
-    if request.method == 'POST':
-        m3u_url = request.form.get('m3u_url')
-        if m3u_url:
-            # Download the M3U content with retry logic
-            m3u_content = retry_on_chunked_encoding_error(m3u_url)
-        elif 'm3u_file' in request.files:
-            m3u_file = request.files['m3u_file']
-            if m3u_file.filename != '':
-                # Read the contents of the uploaded file
-                m3u_content = m3u_file.read().decode('utf-8')
+    with current_app.app_context():
+        db.create_all()
+        if request.method == 'POST':
+            m3u_url = request.form.get('m3u_url')
+            if m3u_url:
+                # Download the M3U content with retry logic
+                m3u_content = retry_on_chunked_encoding_error(m3u_url)
+            elif 'm3u_file' in request.files:
+                m3u_file = request.files['m3u_file']
+                if m3u_file.filename != '':
+                    # Read the contents of the uploaded file
+                    m3u_content = m3u_file.read().decode('utf-8')
 
-        # Parse the M3U content and extract entries
-        entries = parse_m3u_content(m3u_content)
+            # Parse the M3U content and extract entries
+            entries = parse_m3u_content(m3u_content)
 
-        # Save the entries to the main Entry table
-        db.session.bulk_save_objects(entries)
-        db.session.commit()
+            # Save the entries to the main Entry table
+            db.session.bulk_save_objects(entries)
+            db.session.commit()
 
-        # Create a new table with unique entries in tvg_type field
-        unique_tvg_types = set(entry.tvg_type for entry in entries)
-        unique_tvg_type_entries = [UniqueTvgType(tvg_type=tvg_type) for tvg_type in unique_tvg_types]
-        db.session.bulk_save_objects(unique_tvg_type_entries)
-        db.session.commit()
+            # Create a new table with unique entries in tvg_type field
+            unique_tvg_types = set(entry.tvg_type for entry in entries)
+            unique_tvg_type_entries = [UniqueTvgType(tvg_type=tvg_type) for tvg_type in unique_tvg_types]
+            db.session.bulk_save_objects(unique_tvg_type_entries)
+            db.session.commit()
 
-        # Create a new table with unique entries in group_title field
-        unique_group_titles = set(entry.group_title for entry in entries)
-        unique_group_title_entries = [UniqueGroupTitle(group_title=group_title) for group_title in unique_group_titles]
-        db.session.bulk_save_objects(unique_group_title_entries)
-        db.session.commit()
+            # Create a new table with unique entries in group_title field
+            unique_group_titles = set(entry.group_title for entry in entries)
+            unique_group_title_entries = [UniqueGroupTitle(group_title=group_title) for group_title in unique_group_titles]
+            db.session.bulk_save_objects(unique_group_title_entries)
+            db.session.commit()
+
+            return jsonify({'message': 'Data imported successfully.'})
+
+        return render_template('index.html')
 
 
-        return 'Data imported successfully.'
+@app.route('/unique_tvg_types', methods=['GET'])
+def unique_tvg_types_route():
+    with current_app.app_context():
+        unique_tvg_types = [tvg_type.tvg_type for tvg_type in UniqueTvgType.query.all()]
 
-    return render_template('index.html')
+    return jsonify({'tvg_types': unique_tvg_types})
+
 
 
 if __name__ == '__main__':
