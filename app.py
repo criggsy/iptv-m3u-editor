@@ -1,19 +1,26 @@
 from flask import Flask, render_template, request
-from flask_sqlalchemy import SQLAlchemy
+from db import db
+from models import Entry, UniqueTvgType, UniqueGroupTitle
 import requests
 from requests.exceptions import ChunkedEncodingError
 import re
-from models import db, Entry
-from werkzeug.utils import secure_filename
 import os
-
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///m3u.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['UPLOAD_FOLDER'] = 'uploads'  # Set the upload folder path
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)  # Ensure the upload folder exists
+
 # Initialize the db instance
 db.init_app(app)
+
+# Create the database tables
 with app.app_context():
-    db.create_all()
+    from db import create_tables
+    create_tables()
+
 
 # Retry logic for ChunkedEncodingError
 def retry_on_chunked_encoding_error(url):
@@ -88,38 +95,46 @@ def parse_m3u_content(m3u_content):
 
     return entries
 
-# Set the upload folder path
-app.config['UPLOAD_FOLDER'] = os.path.join(app.root_path, 'uploads')
-
-# Ensure the upload folder exists
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-
 # Define your routes here
 @app.route('/', methods=['GET', 'POST'])
 def index():
-    # ...
+    from models import Entry, UniqueTvgType, UniqueGroupTitle
+    db.create_all()
     if request.method == 'POST':
-        if 'm3u_file' in request.files:
+        m3u_url = request.form.get('m3u_url')
+        if m3u_url:
+            # Download the M3U content with retry logic
+            m3u_content = retry_on_chunked_encoding_error(m3u_url)
+        elif 'm3u_file' in request.files:
             m3u_file = request.files['m3u_file']
             if m3u_file.filename != '':
-                # Save the uploaded file
-                filename = secure_filename(m3u_file.filename)
-                m3u_file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                # Read the contents of the uploaded file
+                m3u_content = m3u_file.read().decode('utf-8')
 
-                # Read the contents of the file
-                with open(os.path.join(app.config['UPLOAD_FOLDER'], filename), 'r') as file:
-                    m3u_content = file.read()
+        # Parse the M3U content and extract entries
+        entries = parse_m3u_content(m3u_content)
 
-                # Parse the M3U content and extract entries
-                entries = parse_m3u_content(m3u_content)
+        # Save the entries to the main Entry table
+        db.session.bulk_save_objects(entries)
+        db.session.commit()
 
-                # Save the entries to the database
-                db.session.bulk_save_objects(entries)
-                db.session.commit()
+        # Create a new table with unique entries in tvg_type field
+        unique_tvg_types = set(entry.tvg_type for entry in entries)
+        unique_tvg_type_entries = [UniqueTvgType(tvg_type=tvg_type) for tvg_type in unique_tvg_types]
+        db.session.bulk_save_objects(unique_tvg_type_entries)
+        db.session.commit()
 
-                return 'Data imported successfully.'
+        # Create a new table with unique entries in group_title field
+        unique_group_titles = set(entry.group_title for entry in entries)
+        unique_group_title_entries = [UniqueGroupTitle(group_title=group_title) for group_title in unique_group_titles]
+        db.session.bulk_save_objects(unique_group_title_entries)
+        db.session.commit()
+
+
+        return 'Data imported successfully.'
 
     return render_template('index.html')
+
 
 if __name__ == '__main__':
     app.run()
