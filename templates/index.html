@@ -6,37 +6,45 @@
         body {
             display: flex;
             flex-direction: column;
-            align-items: center;
-            justify-content: center;
+            align-items: flex-start; /* Align items to the top left */
+            justify-content: flex-start; /* Align items to the top left */
             height: 100vh;
+            margin: 0; /* Remove default body margin */
+            padding: 20px; /* Add padding for spacing */
         }
 
         h1 {
             margin-top: 0;
         }
 
-        form {
+        .form-container {
             display: flex;
             flex-direction: column;
-            align-items: center;
-            margin-top: 20px;
         }
 
-        input[type="text"] {
-            width: 300px;
-            height: 30px;
-            font-size: 16px;
-            padding: 5px;
+        .form-container input[type="text"],
+        .form-container input[type="file"] {
             margin-bottom: 10px;
         }
     </style>
 </head>
 <body>
-    <h1>Input M3U URL or Upload M3U File</h1>
-    <form method="POST" action="/" enctype="multipart/form-data">
-        <input type="text" name="m3u_url" placeholder="Enter M3U URL">
-        <input type="file" name="m3u_file">
-        <button type="submit">Submit</button>
-    </form>
+    <h1>M3U Editor</h1>
+    <div class="form-container">
+        <form id="upload-form" method="POST" action="/" enctype="multipart/form-data">
+            <input type="text" name="m3u_url" id="m3u-url" placeholder="Enter M3U URL">
+            <input type="file" name="m3u_file" id="m3u-file">
+            <button type="submit" id="upload-button">Submit</button>
+        </form>
+    </div>
+    <div id="progress-container" style="display: none;">
+        <progress id="upload-progress" max="100"></progress>
+        <p id="progress-message"></p>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        // JavaScript code here
+    </script>
 </body>
 </html>
