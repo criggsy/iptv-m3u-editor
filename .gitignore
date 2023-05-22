@@ -4,3 +4,5 @@ playlist.m3u
 ._.DS_Store
 ._output.json
 app copy.py
+._home.html
+uploads/playlist.m3u
