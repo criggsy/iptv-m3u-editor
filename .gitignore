@@ -1,2 +1,6 @@
 main.py
 playlist.m3u
+.DS_Store
+._.DS_Store
+._output.json
+app copy.py
